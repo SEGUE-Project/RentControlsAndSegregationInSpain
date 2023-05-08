@@ -1,0 +1,87 @@
+# Load required packages
+library(shiny)
+library(ggplot2)
+library(dplyr)
+library(readr)
+
+# Load the data from the CSV files
+# high_income <- read_csv("High income segregation/High_Income_Database.csv")
+# low_income <- read_csv("Low income segregation/Low_Income_Database.csv")
+high_income <- read.csv("https://raw.githubusercontent.com/SEGUE-Project/Trial/main/High_Income_Database.csv")
+low_income <- read.csv("https://raw.githubusercontent.com/SEGUE-Project/Trial/main/Low_Income_Database.csv")
+
+# Round the values
+high_income <- high_income %>%
+  mutate(Dissimilarity_Index = round(Dissimilarity_Index, 4))
+
+low_income <- low_income %>%
+  mutate(Dissimilarity_Index = round(Dissimilarity_Index, 4))
+
+# Define the UI
+ui <- fluidPage(
+  
+  # Choose between checking "Segregación de la riqueza" or "Segregación de la pobreza"
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("database", "Elige qué tipo de segregación espacial quieres visualizar:",
+                  choices = c("Segregación de la riqueza" = "high_income",
+                              "Segregación de la pobreza" = "low_income")),
+      helpText("La segregación espacial hace referencia a la separación de distintos grupos de personas en diferentes zonas de una ciudad o pueblo."),
+      helpText("Mediante esta página web puedes comprobar la evolución de la segregación espacial entre ricos y pobres de cualquier municipio de España desde 2015 hasta 2020."),
+      ),
+    
+    # Choose a municipality (out of those of the column "Municipality")
+    mainPanel(
+      selectInput("municipality", "Elige un municipio:",
+                  choices = NULL),
+      
+      # Display the plot of the evolution of the Dissimilarity Index
+      plotOutput("plot")
+    )
+  ),
+  tags$footer(
+    tags$p("Nota: El medidor de la segregación especial que utiliza esta página es el Índice de Disimilitud. Este indicador calcula el porcentaje de personas que deberían vivir en otra parte de una localidad para que todos los barrios tuviesen la misma proporción de grupos sociales que el municipio en su conjunto. Un valor próximo a 0 indica que la localidad se encuentra poco segregada, mientras que los valores más cercanos a 1 reflejan niveles muy altos de segregación espacial."),
+    tags$p("La segregación de la riqueza se mide aquí como la separación espacial entre los hogares con ingresos superiores al 200% de la mediana (unos 32000€ netos al año) del resto de la población. La segregación de la pobreza se calcula teniendo en cuenta la distribución por el municipio de los hogares con ingresos inferiores al umbral de la pobreza (algo menos de 10000€ netos al año) y el resto de hogares."),
+    tags$p("Fuente: Instituto Nacional de Estadística."),
+    tags$p("Procesamiento de datos y visualización: Javier San Millán.")
+  )
+)
+
+# Define the server
+server <- function(input, output, session) {
+  
+  # Update the choices of the "municipality" input based on the chosen database
+  observeEvent(input$database, {
+    if (input$database == "high_income") {
+      choices <- sort(unique(high_income$Municipality))
+    } else {
+      choices <- sort(unique(low_income$Municipality))
+    }
+    updateSelectInput(session, "municipality", choices = choices)
+  })
+  
+  # Display the plot of the evolution of the Dissimilarity Index
+  output$plot <- renderPlot({
+    
+    # Filter the data based on the chosen municipality and the years 2015-2020
+    if (input$database == "high_income") {
+      data <- high_income %>% filter(Municipality == input$municipality,
+                                     Year >= 2015 & Year <= 2020)
+    } else {
+      data <- low_income %>% filter(Municipality == input$municipality,
+                                    Year >= 2015 & Year <= 2020)
+    }
+    
+    # Create a line plot of the evolution of the Dissimilarity Index
+    ggplot(data, aes(x = Year, y = Dissimilarity_Index)) +
+      geom_line() +
+      geom_text(aes(label = Dissimilarity_Index), vjust = -1) +
+      geom_point() +
+      xlab("Año") +
+      ylab("Índice de Disimilitud") +
+      ggtitle(paste("Evolución del Índice de Disimilitud en", input$municipality))
+  })
+}
+
+# Run the app
+shinyApp(ui = ui, server = server)
